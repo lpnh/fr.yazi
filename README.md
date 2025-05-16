@@ -1,8 +1,5 @@
 # fr.yazi
 
-> [!NOTE]
-> this plugin is only guaranteed to be compatible with Yazi nightly
-
 a Yazi plugin that integrates `fzf` with `bat` preview for `rg` search and
 `rga` preview for `rga` search
 
