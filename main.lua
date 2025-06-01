@@ -103,7 +103,7 @@ local function entry(_, job)
 	local cwd = tostring(get_cwd())
 
 	local child, err = Command(shell)
-		:args({ "-c", args })
+		:arg({ "-c", args })
 		:cwd(cwd)
 		:stdin(Command.INHERIT)
 		:stdout(Command.PIPED)
