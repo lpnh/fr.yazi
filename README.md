@@ -39,12 +39,12 @@ below is an example of how to configure both in the
 `~/.config/yazi/keymap.toml` file:
 
 ```toml
-[[manager.prepend_keymap]]
+[[mgr.prepend_keymap]]
 on = ["f", "r"]
 run = "plugin fr rg"
 desc = "Search file by content (rg)"
 
-[[manager.prepend_keymap]]
+[[mgr.prepend_keymap]]
 on = ["f", "a"]
 run = "plugin fr rga"
 desc = "Search file by content (rga)"
