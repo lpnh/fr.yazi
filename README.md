@@ -15,7 +15,7 @@ a Yazi plugin that integrates `fzf` with `bat` preview for `rg` search and
 ## installation
 
 ```sh
-ya pack -a lpnh/fr
+ya pkg add lpnh/fr
 ```
 
 ## usage
