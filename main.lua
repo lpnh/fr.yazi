@@ -25,7 +25,7 @@ local get_custom_opts = ya.sync(function(self)
 	}
 end)
 
-local fzf_from = function(job_args, opts_tbl)
+local fzf_from = function(job_args, opts_tbl, major, minor)
 	local cmd_tbl = {
 		rg = {
 			grep = "rg --color=always --line-number --smart-case" .. opts_tbl.rg,
@@ -78,7 +78,9 @@ local fzf_from = function(job_args, opts_tbl)
 	}
 
 	if cmd.extra then
-		table.insert(fzf_tbl, cmd.extra(cmd.grep))
+		if major > 0 or minor >= 45 then -- transform action requires fzf v0.45 or above
+			table.insert(fzf_tbl, cmd.extra(cmd.grep))
+		end
 	end
 
 	return table.concat(fzf_tbl, " ")
@@ -98,8 +100,14 @@ end
 
 local function entry(_, job)
 	local _permit = ya.hide()
+	local fzf_version, err = Command("fzf"):arg("--version"):output()
+	if err then
+		return fail("`fzf` was not found")
+	end
+	local major, minor = fzf_version.stdout:match("(%d+)%.(%d+)")
+
 	local custom_opts = get_custom_opts()
-	local args = fzf_from(job.args[1], custom_opts)
+	local args = fzf_from(job.args[1], custom_opts, tonumber(major), tonumber(minor))
 	local cwd = tostring(get_cwd())
 
 	local child, err = Command(shell)
