@@ -69,7 +69,6 @@ local fzf_from = function(job_args, opts_tbl, major, minor)
 		"--nth=3..",
 		cmd.prev,
 		cmd.prompt,
-		"--bind='start:reload:" .. cmd.grep .. " {q}'",
 		"--bind='change:reload:sleep 0.1; " .. cmd.grep .. " {q} || true'",
 		"--bind='ctrl-]:change-preview-window(80%|66%)'",
 		"--bind='ctrl-\\:change-preview-window(right|up)'",
@@ -77,10 +76,14 @@ local fzf_from = function(job_args, opts_tbl, major, minor)
 		opts_tbl.fzf,
 	}
 
-	if cmd.extra then
-		if major > 0 or minor >= 45 then -- transform action requires fzf v0.45 or above
-			table.insert(fzf_tbl, cmd.extra(cmd.grep))
-		end
+	-- start event requires fzf v0.35 or above
+	if major > 0 or minor >= 35 then
+		table.insert(fzf_tbl, "--bind='start:reload:" .. cmd.grep .. " {q}'")
+	end
+
+	-- transform action requires fzf v0.45 or above
+	if (major > 0 or minor >= 45) and cmd.extra then
+		table.insert(fzf_tbl, cmd.extra(cmd.grep))
 	end
 
 	return table.concat(fzf_tbl, " ")
