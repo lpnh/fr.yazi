@@ -143,7 +143,7 @@ local function entry(_, job)
 		local colon_pos = string.find(target, ":")
 		local file_url = colon_pos and string.sub(target, 1, colon_pos - 1) or target
 
-		ya.manager_emit("reveal", { file_url })
+		ya.emit("reveal", { file_url })
 	end
 end
 
