@@ -102,7 +102,9 @@ local function setup(self, opts)
 end
 
 local function entry(_, job)
-	local _permit = ya.hide()
+	-- TODO: remove fallback after next stable release
+	local _permit = ui.hide and ui.hide() or ya.hide()
+
 	local fzf_version, err = Command("fzf"):arg("--version"):output()
 	if err then
 		return fail("`fzf` was not found")
