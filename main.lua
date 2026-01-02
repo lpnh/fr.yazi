@@ -13,8 +13,8 @@ local fmt_opts = function(opt)
 	return ""
 end
 
-local get_custom_opts = ya.sync(function(self)
-	local opts = self.custom_opts or {}
+local get_custom_opts = ya.sync(function(state)
+	local opts = state.custom_opts or {}
 
 	return {
 		fzf = fmt_opts(opts.fzf),
@@ -89,10 +89,10 @@ local fzf_from = function(job_args, opts_tbl, major, minor)
 	return table.concat(fzf_tbl, " ")
 end
 
-local function setup(self, opts)
+local function setup(state, opts)
 	opts = opts or {}
 
-	self.custom_opts = {
+	state.custom_opts = {
 		fzf = opts.fzf,
 		rg = opts.rg,
 		bat = opts.bat,
