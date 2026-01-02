@@ -1,4 +1,4 @@
---- @since 25.5.31
+--- @since 25.12.29
 
 local shell = os.getenv("SHELL"):match(".*/(.*)")
 local get_cwd = ya.sync(function() return cx.active.current.cwd end)
@@ -102,8 +102,7 @@ local function setup(state, opts)
 end
 
 local function entry(_, job)
-	-- TODO: remove fallback after next stable release
-	local _permit = ui.hide and ui.hide() or ya.hide()
+	local _permit = ui.hide()
 
 	local fzf_version, err = Command("fzf"):arg("--version"):output()
 	if err then
