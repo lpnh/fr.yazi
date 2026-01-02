@@ -113,11 +113,11 @@ local function entry(_, job)
 
 	local custom_opts = get_custom_opts()
 	local args = fzf_from(job.args[1], custom_opts, tonumber(major), tonumber(minor))
-	local cwd = tostring(get_cwd())
+	local cwd = get_cwd()
 
 	local child, err = Command(shell)
 		:arg({ "-c", args })
-		:cwd(cwd)
+		:cwd(tostring(cwd))
 		:stdin(Command.INHERIT)
 		:stdout(Command.PIPED)
 		:stderr(Command.INHERIT)
@@ -141,9 +141,12 @@ local function entry(_, job)
 	local target = output.stdout:gsub("\n$", "")
 	if target ~= "" then
 		local colon_pos = string.find(target, ":")
-		local file_url = colon_pos and string.sub(target, 1, colon_pos - 1) or target
-
-		ya.emit("reveal", { file_url })
+		local file_path = colon_pos and string.sub(target, 1, colon_pos - 1) or target
+		local url = Url(file_path)
+		if not url.is_absolute then
+			url = cwd:join(url)
+		end
+		ya.emit("reveal", { url })
 	end
 end
 
