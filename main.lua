@@ -124,12 +124,12 @@ local function entry(_, job)
 		:spawn()
 
 	if not child then
-		return fail("Command failed with error code %s", err)
+		return fail("Failed to spawn shell, error: %s", err)
 	end
 
 	local output, err = child:wait_with_output()
-	if not output then -- unreachable?
-		return fail("Cannot read command output, error code %s", err)
+	if not output then
+		return fail("Cannot read command output, error: %s", err)
 	elseif output.status.code == 130 then -- interrupted with <ctrl-c> or <esc>
 		return
 	elseif output.status.code == 1 then -- no match
