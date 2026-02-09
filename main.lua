@@ -1,6 +1,19 @@
 --- @since 25.12.29
 
-local shell = os.getenv("SHELL"):match(".*/(.*)")
+local is_windows = ya.target_family() == "windows"
+
+local function get_shell_info()
+	if is_windows then
+		return "cmd", "/c", "cmd"
+	else
+		local shell_path = os.getenv("SHELL") or "/bin/sh"
+		local shell_name = shell_path:match(".*/(.*)")
+		return shell_path, "-c", shell_name
+	end
+end
+
+local shell, shell_flag, shell_name = get_shell_info()
+
 local get_cwd = ya.sync(function() return cx.active.current.cwd end)
 local fail = function(s, ...) ya.notify { title = "fr", content = string.format(s, ...), timeout = 5, level = "error" } end
 
@@ -25,7 +38,8 @@ local get_custom_opts = ya.sync(function(state)
 	}
 end)
 
-local fzf_from = function(job_args, opts_tbl, major, minor)
+-- Unix (bash/zsh/fish) fzf command builder (original logic)
+local function fzf_from_unix(job_args, opts_tbl, major, minor)
 	local cmd_tbl = {
 		rg = {
 			grep = "rg --color=always --line-number --smart-case" .. opts_tbl.rg,
@@ -38,7 +52,7 @@ local fzf_from = function(job_args, opts_tbl, major, minor)
 					default = { cond = "[[ ! $FZF_PROMPT =~ rg ]] &&", op = "||" },
 					fish = { cond = 'not string match -q "*rg*" $FZF_PROMPT; and', op = "; or" },
 				}
-				local lgc = logic[shell] or logic.default
+				local lgc = logic[shell_name] or logic.default
 				local extra_bind = "--bind='ctrl-s:transform:%s "
 					.. [[echo "rebind(change)+change-prompt(rg> )+disable-search+clear-query+reload(%s {q} || true)" %s ]]
 					.. [[echo "unbind(change)+change-prompt(fzf> )+enable-search+clear-query"']]
@@ -111,24 +125,63 @@ local function entry(_, job)
 	local major, minor = fzf_version.stdout:match("(%d+)%.(%d+)")
 
 	local custom_opts = get_custom_opts()
-	local args = fzf_from(job.args[1], custom_opts, tonumber(major), tonumber(minor))
 	local cwd = get_cwd()
 
-	local child, err = Command(shell)
-		:arg({ "-c", args })
-		:cwd(tostring(cwd))
-		:stdin(Command.INHERIT)
-		:stdout(Command.PIPED)
-		:stderr(Command.INHERIT)
-		:spawn()
+	local child, spawn_err
 
-	if not child then
-		return fail("Failed to spawn shell, error: %s", err)
+	if is_windows then
+		-- On Windows, spawn fzf directly with individual arguments
+		-- This mirrors the Unix behavior: --disabled + reload for live search
+		-- Default to rga on Windows if available, fallback to rg
+		local job_arg = job.args[1]
+		if not job_arg then
+			-- Check if rga is available
+			local rga_check = Command("rga"):arg("--version"):output()
+			job_arg = rga_check and "rga" or "rg"
+		end
+
+		local rg_cmd = "rg --color=always --line-number --smart-case --hidden" .. custom_opts.rg
+		local rga_cmd = "rga --color=always --line-number --smart-case --hidden" .. custom_opts.rga
+		local grep = (job_arg == "rga") and rga_cmd or rg_cmd
+
+		child, spawn_err = Command("fzf")
+			:arg("--ansi")
+			:arg("--disabled")
+			:arg("--layout=reverse")
+			:arg("--delimiter=:")
+			:arg("--nth=3..")
+			:arg("--preview"):arg("bat --color=always --highlight-line={2} {1}")
+			:arg("--preview-window=up,60%")
+			:arg("--bind"):arg("start:reload:" .. grep .. " .")
+			:arg("--bind"):arg("change:reload:" .. grep .. " {q}")
+			:arg("--bind"):arg("ctrl-r:clear-query+reload:" .. grep .. " {q}")
+			:arg("--bind"):arg("ctrl-]:change-preview-window(80%|66%)")
+			:arg("--bind"):arg("ctrl-\\:change-preview-window(right|up)")
+			:cwd(tostring(cwd))
+			:stdin(Command.INHERIT)
+			:stdout(Command.PIPED)
+			:stderr(Command.INHERIT)
+			:spawn()
+	else
+		-- On Unix, use shell to run the command
+		local args = fzf_from_unix(job.args[1] or "rg", custom_opts, tonumber(major), tonumber(minor))
+
+		child, spawn_err = Command(shell)
+			:arg({ shell_flag, args })
+			:cwd(tostring(cwd))
+			:stdin(Command.INHERIT)
+			:stdout(Command.PIPED)
+			:stderr(Command.INHERIT)
+			:spawn()
 	end
 
-	local output, err = child:wait_with_output()
+	if not child then
+		return fail("Failed to spawn fzf, error: %s", spawn_err)
+	end
+
+	local output, wait_err = child:wait_with_output()
 	if not output then
-		return fail("Cannot read command output, error: %s", err)
+		return fail("Cannot read command output, error: %s", wait_err)
 	elseif output.status.code == 130 then -- interrupted with <ctrl-c> or <esc>
 		return
 	elseif output.status.code == 1 then -- no match
@@ -137,15 +190,30 @@ local function entry(_, job)
 		return fail("`fzf` exited with error code %s", output.status.code)
 	end
 
-	local target = output.stdout:gsub("\n$", "")
+	local target = output.stdout:gsub("\n$", ""):gsub("\r\n$", "")
 	if target ~= "" then
-		local colon_pos = string.find(target, ":")
-		local file_path = colon_pos and string.sub(target, 1, colon_pos - 1) or target
+		-- Parse output format: file:line:col:content or file:line:content
+		local file_path, line_num = target:match("^(..-):(%d+):")
+		if not file_path then
+			-- Fallback: just get file path
+			local colon_pos = string.find(target, ":")
+			file_path = colon_pos and string.sub(target, 1, colon_pos - 1) or target
+		end
+
 		local url = Url(file_path)
 		if not url.is_absolute then
 			url = cwd:join(url)
 		end
-		ya.emit("reveal", { url })
+
+		if line_num then
+			-- Open in editor at specific line
+			local editor = os.getenv("EDITOR") or "nvim"
+			local cmd = editor .. " +" .. line_num .. ' "' .. tostring(url) .. '"'
+			os.execute(cmd)
+		else
+			-- No line number, just reveal in yazi
+			ya.emit("reveal", { url })
+		end
 	end
 end
 

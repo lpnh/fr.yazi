@@ -3,7 +3,7 @@
 a Yazi plugin that integrates `fzf` with `bat` preview for `rg` search and
 `rga` preview for `rga` search
 
-**supports**: `bash`, `fish`, and `zsh`
+**supports**: `bash`, `fish`, `zsh`, and Windows `cmd`
 
 ## dependencies
 
